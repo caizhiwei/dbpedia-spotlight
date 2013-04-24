@@ -280,6 +280,12 @@
             <artifactId>jackson-core-asl</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>edu.umass.cs.iesl.wikilink</groupId>
+            <artifactId>wikilink</artifactId>
+            <version>0.1-SNAPSHOT</version>
+        </dependency>
+
     </dependencies>
 
 </project>

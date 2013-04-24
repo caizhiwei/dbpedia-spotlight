@@ -3,7 +3,6 @@ package org.dbpedia.spotlight.db.io
 import io.Source
 import java.io.{File, FileInputStream, InputStream}
 import org.dbpedia.spotlight.model.Factory.OntologyType
-import collection.immutable.HashMap
 import scala.collection.JavaConverters._
 import java.util.NoSuchElementException
 import scala.collection.mutable.HashSet
@@ -12,11 +11,13 @@ import org.dbpedia.spotlight.filter.occurrences.RedirectResolveFilter
 import org.dbpedia.spotlight.db.WikipediaToDBpediaClosure
 import org.apache.commons.logging.LogFactory
 import scala.Predef._
-import scala.Array
+import scala.{collection, Array}
 import org.dbpedia.spotlight.model._
 import collection.parallel.mutable
 import org.dbpedia.spotlight.exceptions.NotADBpediaResourceException
 import org.semanticweb.yars.nx.parser.NxParser
+import edu.umass.cs.iesl.wikilink.expanded.data.WikiLinkItem
+import scala.collection
 
 
 /**
@@ -79,9 +80,9 @@ object DBpediaResourceSource {
     resourceMap.iterator.map( f => Pair(f._2, f._2.support) ).toMap.asJava
   }
 
-  def fromPigInputStreams(
+  def fromUriCount(
     wikipediaToDBpediaClosure: WikipediaToDBpediaClosure,
-    resourceCounts: InputStream,
+    uriCountIterator: Iterator[(String,Int)],
     instanceTypes: (String, InputStream),
     namespace: String
   ): java.util.Map[DBpediaResource, Int] = {
@@ -95,21 +96,20 @@ object DBpediaResourceSource {
 
     LOG.info("Reading resources+counts...")
 
-    Source.fromInputStream(resourceCounts).getLines() foreach {
-      line: String => {
+    uriCountIterator foreach {
+      uriCount: (String,Int) => {
         try {
-          val Array(wikiurl, count) = line.trim().split('\t')
-          val res = new DBpediaResource(wikipediaToDBpediaClosure.wikipediaToDBpediaURI(wikiurl))
+          val res = new DBpediaResource(wikipediaToDBpediaClosure.wikipediaToDBpediaURI(uriCount._1))
 
           resourceByURI.get(res.uri) match {
             case Some(oldRes) => {
-              oldRes.setSupport(oldRes.support + count.toInt)
+              oldRes.setSupport(oldRes.support + uriCount._2)
               resourceByURI.put(oldRes.uri, oldRes)
             }
             case None => {
               res.id = id
               id += 1
-              res.setSupport(count.toInt)
+              res.setSupport(uriCount._2)
               resourceByURI.put(res.uri, res)
             }
           }
@@ -171,16 +171,55 @@ object DBpediaResourceSource {
 
     resourceMap
   }
+  def getUriCountPig(resourceCounts: InputStream): Iterator[(String,Int)] ={
+    for(line <- Source.fromInputStream(resourceCounts).getLines())
+    yield {
+        val l=line.trim().split('\t')
+        (l(0),l(1).toInt)
+    }
+  }
+  def getUriCountWikiLink(wikiLinkFile: File): Iterator[(String,Int)] ={
+    val uriMap = new collection.mutable.HashMap[String, Int]()
 
+    WikiLinkIterator.getIterator(wikiLinkFile) foreach {
+      wikiItem: WikiLinkItem =>{
 
+        wikiItem.mentions foreach {
+          mention => {
+            val count = uriMap.getOrElseUpdate(mention.wikiUrl, 0)
+            uriMap.update(mention.wikiUrl, count + 1)
+          }
+        }
+
+      }
+
+    }
+    uriMap.toSeq.toIterator
+  }
+  def fromWikiLinkFile(
+    wikipediaToDBpediaClosure: WikipediaToDBpediaClosure,
+    wikiLinkFile: File,
+    instanceTypes: File,
+    namespace: String) = fromUriCount(
+    wikipediaToDBpediaClosure,
+    getUriCountWikiLink(wikiLinkFile),
+    if(instanceTypes == null)
+      null
+    else
+      (
+      if(instanceTypes.getName.endsWith("nt")) "nt" else "tsv",
+      new FileInputStream(instanceTypes)
+      ),
+    namespace
+  )
   def fromPigFiles(
     wikipediaToDBpediaClosure: WikipediaToDBpediaClosure,
     counts: File,
     instanceTypes: File,
     namespace: String
-  ): java.util.Map[DBpediaResource, Int] = fromPigInputStreams(
+  ): java.util.Map[DBpediaResource, Int] = fromUriCount(
     wikipediaToDBpediaClosure,
-    new FileInputStream(counts),
+    getUriCountPig(new FileInputStream(counts)),
     if(instanceTypes == null)
       null
     else

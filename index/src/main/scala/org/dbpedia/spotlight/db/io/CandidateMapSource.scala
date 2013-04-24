@@ -13,6 +13,9 @@ import org.apache.commons.logging.LogFactory
 import org.dbpedia.spotlight.exceptions._
 import org.dbpedia.spotlight.db.memory.MemoryResourceStore
 import org.dbpedia.extraction.util.WikiUtil
+import edu.umass.cs.iesl.wikilink.expanded.data.WikiLinkItem
+import java.util
+import scala.collection.mutable
 
 
 /**
@@ -124,4 +127,32 @@ object CandidateMapSource {
     fromTSVInputStream(new FileInputStream(candmap), resStore, sfStore)
   }
 
+  def fromWikiLinkFile(
+    wikiLinkFile: File,
+    resourceStore: ResourceStore,
+    surfaceFormStore: SurfaceFormStore
+    ): java.util.Map[Candidate, Int] = {
+
+    val candidateMap = new java.util.HashMap[Candidate, Int]()
+
+    WikiLinkIterator.getIterator(wikiLinkFile) foreach {
+      wikiItem: WikiLinkItem =>{
+
+        wikiItem.mentions foreach {
+          mention => {
+            val candidate = Candidate(surfaceFormStore.getSurfaceForm(mention.anchorText), resourceStore.getResourceByName(mention.wikiUrl))
+            val count = (
+              if(candidateMap.containsKey(candidate))
+                candidateMap.get(candidate)
+              else 0
+              )
+            candidateMap.put(candidate, count + 1)
+          }
+        }
+
+      }
+    }
+
+    candidateMap
+  }
 }
