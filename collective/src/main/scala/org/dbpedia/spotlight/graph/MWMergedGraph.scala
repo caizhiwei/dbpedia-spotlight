@@ -149,6 +149,6 @@ object MWMergedGraph{
 
      val g = GraphUtils.buildWeightedGraphFromFile(sgFile,graphConfig.getNodeNumber)
 
-     GraphUtils.storeWeightedGraph(g,sgSubDir,sgBasename)
+     GraphUtils.storeWeightedGraph(g,sgSubDir+sgBasename)
    }
 }

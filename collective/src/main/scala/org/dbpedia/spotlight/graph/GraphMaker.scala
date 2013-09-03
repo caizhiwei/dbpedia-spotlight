@@ -6,6 +6,7 @@ import org.dbpedia.spotlight.util.{SimpleUtils, GraphConfiguration, GraphUtils}
 import org.apache.commons.logging.LogFactory
 import scala.io.Source
 import com.officedepot.cdap2.collection.CompactHashMap
+import it.unimi.dsi.webgraph.labelling.ArcLabelledImmutableGraph
 
 /**
  *
@@ -29,29 +30,58 @@ import com.officedepot.cdap2.collection.CompactHashMap
 object GraphMaker{
   private val LOG = LogFactory.getLog(this.getClass)
 
-  /**
-   * Create and store the co-occurrence graph using the CooccurrencesCount.pig script
-   * @param hostMap The host map parsed from the uriMap file
-   * @param baseDir Base directory that graph files are stored because we recommend different graphs are stored in the same directory
-   * @param config The graph config
-   * @param numberOfNodes The number of nodes stored in HostMap
-   */
-  def makeGraph(hostMap: CompactHashMap[String,Int], baseDir:String, config:GraphConfiguration, numberOfNodes:Int){
+  def makeGraph(hostMap: CompactHashMap[String,Int], numberOfNodes:Int, srcFilePath: String,
+                listFilePath: String, graphFilePath: String) : ArcLabelledImmutableGraph = {
     //Generating for co-occurrences files
-    val cooccSubDir = baseDir+config.get("org.dbpedia.spotlight.graph.coocc.dir")
-    SimpleUtils.createDir(cooccSubDir)
-
-    val cooccsSrcFile = new File(config.get("org.dbpedia.spotlight.graph.coocc.src"))
-    val cooccInterListFile = new File(cooccSubDir+config.get("org.dbpedia.spotlight.graph.coocc.integerList"))
-    val cooccBaseName = config.get("org.dbpedia.spotlight.graph.coocc.basename")
-
+    val srcFile = new File(srcFilePath)
+    val listFile = new File(listFilePath)
     //parse the cooccsSrcFile and store the parsed result as an IntegerList
-    val wcg = WikipediaGraph.buildTripleList(cooccsSrcFile,hostMap,cooccInterListFile)
+    WikipediaGraph.buildTripleList(srcFile,hostMap,listFile)
 
     //build a weighted graph and store.
     //We should use the method that specify a node number, which make it possible to have nodes with no arcs
-    val cowg = GraphUtils.buildWeightedGraphFromFile(cooccInterListFile,numberOfNodes)
-    GraphUtils.storeWeightedGraph(cowg,cooccSubDir,cooccBaseName)
+    GraphUtils.buildWeightedGraphFromFile(listFile,numberOfNodes)
+  }
+  /**
+   * Create and store the occurrence graph
+   * @param baseDir Base dir for graph storage
+   * @param config Graph config
+   * @param hostMap The host map parsed from the uriMap file
+   * @param numberOfNodes The number of nodes stored in HostMap
+   */
+  def makeCooccGraph(baseDir: String, config:GraphConfiguration, hostMap: CompactHashMap[String,Int], numberOfNodes:Int){
+    val cooccSubDir = baseDir+config.get("org.dbpedia.spotlight.graph.coocc.dir")
+    SimpleUtils.createDir(cooccSubDir)
+
+    val cooccsSrcFilePath = config.get("org.dbpedia.spotlight.graph.coocc.src")
+    val cooccInterListFilePath = cooccSubDir+config.get("org.dbpedia.spotlight.graph.coocc.integerList")
+    val cooccGraphPath = cooccSubDir+config.get("org.dbpedia.spotlight.graph.coocc.basename")
+    val graph = makeGraph(hostMap, numberOfNodes, cooccsSrcFilePath, cooccInterListFilePath, cooccGraphPath)
+    GraphUtils.storeWeightedGraph(graph,cooccGraphPath)
+  }
+  /**
+   * Create and store the co-occurrence graph
+   * @param baseDir Base dir for graph storage
+   * @param config Graph config
+   * @param hostMap The host map parsed from the uriMap file
+   * @param numberOfNodes The number of nodes stored in HostMap
+   */
+  def makeOccsGraph(baseDir: String, config:GraphConfiguration, hostMap: CompactHashMap[String,Int], numberOfNodes:Int){
+    val occSubDir = baseDir+config.get("org.dbpedia.spotlight.graph.coocc.dir")
+    SimpleUtils.createDir(occSubDir)
+
+    val occsSrcFilePath = config.get("org.dbpedia.spotlight.graph.occ.src")
+    val occInterListFilePath = occSubDir+config.get("org.dbpedia.spotlight.graph.occ.integerList")
+    val occGraphPath = occSubDir+config.get("org.dbpedia.spotlight.graph.occ.basename")
+    val graph = makeGraph(hostMap, numberOfNodes, occsSrcFilePath, occInterListFilePath, occGraphPath)
+    GraphUtils.storeWeightedGraph(graph,occGraphPath)
+
+    val occTransposeBaseName = config.get("org.dbpedia.spotlight.graph.transpose.occ.basename")
+    val batchSize = config.get("org.dbpedia.spotlight.graph.transpose.batchSize").toInt
+
+    //also store the transpose graph, easy to use outdegree to find the indegree of a node in the origin graph
+    val ocwgTrans = GraphUtils.transpose(graph,batchSize)
+    GraphUtils.storeWeightedGraph(ocwgTrans,occSubDir+occTransposeBaseName)
   }
 
   //parameter is the graph properties file: ../../conf/graph.properties
@@ -65,10 +95,10 @@ object GraphMaker{
     SimpleUtils.createDir(baseDir)
 
     val uriMapFile = new File(config.get("org.dbpedia.spotlight.graph.dir")+config.get("org.dbpedia.spotlight.graph.mapFile"))
-    val occsSrcFile = new File(config.get("org.dbpedia.spotlight.graph.occ.src"))
+    val occsTempFile = new File(config.get("org.dbpedia.spotlight.graph.occ.temp"))
 
     //Generate the host map
-    val numberOfNodes = HostMap.parseToHostMap(occsSrcFile,uriMapFile)
+    val numberOfNodes = HostMap.parseToHostMap(occsTempFile,uriMapFile)
     val outWriter = new PrintWriter(new File(config.get("org.dbpedia.spotlight.graph.dir")+"/nodenumber"))
     outWriter.println(numberOfNodes)
     outWriter.close()
@@ -76,7 +106,7 @@ object GraphMaker{
     //Get the host map
     val hostMap = HostMap.load(uriMapFile)
 
-    makeOccsGraph(occsSrcFile,hostMap,baseDir,config,numberOfNodes)
-    makeCooccGraph(hostMap,baseDir,config,numberOfNodes)
+    makeOccsGraph(baseDir,config,hostMap,numberOfNodes)
+    makeCooccGraph(baseDir,config,hostMap,numberOfNodes)
   }
 }

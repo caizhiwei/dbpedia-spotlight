@@ -184,16 +184,15 @@ object GraphUtils {
   /**
    * Store the weighted graph as BVGraph and the labels
    * @param g The weighted graph to be stored
-   * @param path The path to which the graph going to be stored
-   * @param baseName The base name of the graph to be stored as
+   * @param fullpath The path to which the graph going to be stored
    */
-  def storeWeightedGraph(g: ArcLabelledImmutableGraph, path: String, baseName: String) {
-    val fullPath = path + baseName
+  def storeWeightedGraph(g: ArcLabelledImmutableGraph, fullPath: String) {
 
     LOG.info("Storing Weighted Graph to " + fullPath)
 
     LOG.info("Storing Labels")
-    BitStreamArcLabelledImmutableGraph.store(g, fullPath, baseName + ArcLabelledImmutableGraph.UNDERLYINGGRAPH_SUFFIX)
+    val basename = fullPath.substring(fullPath.lastIndexOf('/'))
+    BitStreamArcLabelledImmutableGraph.store(g, fullPath, basename + ArcLabelledImmutableGraph.UNDERLYINGGRAPH_SUFFIX)
 
     LOG.info("Compressing Graph")
     BVGraph.store(g, fullPath + ArcLabelledImmutableGraph.UNDERLYINGGRAPH_SUFFIX)

@@ -36,10 +36,9 @@ object HostMap {
     Source.fromFile(occsFile).getLines().filterNot(line => line.trim() == "").foreach(
       line => {
         val fields = line.split("\\t")
-        if (fields.length == 5) {
-          val id = fields(0)
+        if (fields.length == 2) {
+          val srcUri = fields(0)
           val targetUri = fields(1)
-          val srcUri = id.split("-")(0)
 
           if (!uriSet.contains(srcUri)) {
             uriSet += srcUri
