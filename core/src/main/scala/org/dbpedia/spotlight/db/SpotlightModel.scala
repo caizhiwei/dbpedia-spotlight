@@ -3,7 +3,6 @@ package org.dbpedia.spotlight.db
 import concurrent.{TokenizerWrapper, SpotterWrapper}
 import memory.MemoryStore
 import model._
-import org.tartarus.snowball.SnowballProgram
 import opennlp.tools.tokenize.{TokenizerModel, TokenizerME}
 import opennlp.tools.sentdetect.{SentenceModel, SentenceDetectorME}
 import opennlp.tools.postag.{POSModel, POSTaggerME}
@@ -14,12 +13,12 @@ import org.dbpedia.spotlight.model.SpotterConfiguration.SpotterPolicy
 import org.dbpedia.spotlight.model.SpotlightConfiguration.DisambiguationPolicy
 import org.dbpedia.spotlight.disambiguate.ParagraphDisambiguatorJ
 import org.dbpedia.spotlight.spot.{SpotXmlParser, Spotter}
-import java.io.{File, FileInputStream}
+import java.io.{IOException, File, FileInputStream}
 import java.util.{Locale, Properties}
 import opennlp.tools.chunker.ChunkerModel
 import opennlp.tools.namefind.TokenNameFinderModel
 import stem.SnowballStemmer
-import tokenize.{OpenNLPTokenizer, LanguageIndependentTokenizer, BaseTextTokenizer}
+import tokenize.{OpenNLPTokenizer, LanguageIndependentTokenizer}
 
 
 class SpotlightModel(val tokenizer: TextTokenizer,
@@ -32,17 +31,35 @@ object SpotlightModel {
   def loadStopwords(modelFolder: File): Set[String] = scala.io.Source.fromFile(new File(modelFolder, "stopwords.list")).getLines().map(_.trim()).toSet
   def loadSpotterThresholds(file: File): Seq[Double] = scala.io.Source.fromFile(file).getLines().next().split(" ").map(_.toDouble)
 
-  def fromFolder(modelFolder: File): SpotlightModel = {
-
+  def storesFromFolder(modelFolder: File): (TokenTypeStore, SurfaceFormStore, ResourceStore, CandidateMapStore, ContextStore) = {
     val modelDataFolder = new File(modelFolder, "model")
+
+    List(
+      new File(modelDataFolder, "tokens.mem"),
+      new File(modelDataFolder, "sf.mem"),
+      new File(modelDataFolder, "res.mem"),
+      new File(modelDataFolder, "candmap.mem")
+    ).foreach {
+      modelFile: File =>
+        if (!modelFile.exists())
+          throw new IOException("Invalid Spotlight model folder: Could not read required file %s in %s.".format(modelFile.getName, modelFile.getPath))
+    }
+
     val tokenTypeStore = MemoryStore.loadTokenTypeStore(new FileInputStream(new File(modelDataFolder, "tokens.mem")))
-    val sfStore =        MemoryStore.loadSurfaceFormStore(new FileInputStream(new File(modelDataFolder, "sf.mem")))
-    val resStore =       MemoryStore.loadResourceStore(new FileInputStream(new File(modelDataFolder, "res.mem")))
-    val candMapStore =   MemoryStore.loadCandidateMapStore(new FileInputStream(new File(modelDataFolder, "candmap.mem")), resStore)
+    val sfStore = MemoryStore.loadSurfaceFormStore(new FileInputStream(new File(modelDataFolder, "sf.mem")))
+    val resStore = MemoryStore.loadResourceStore(new FileInputStream(new File(modelDataFolder, "res.mem")))
+    val candMapStore = MemoryStore.loadCandidateMapStore(new FileInputStream(new File(modelDataFolder, "candmap.mem")), resStore)
     val contextStore = if (new File(modelDataFolder, "context.mem").exists())
       MemoryStore.loadContextStore(new FileInputStream(new File(modelDataFolder, "context.mem")), tokenTypeStore)
     else
       null
+
+    (tokenTypeStore, sfStore, resStore, candMapStore, contextStore)
+  }
+
+  def fromFolder(modelFolder: File): SpotlightModel = {
+
+    val (tokenTypeStore, sfStore, resStore, candMapStore, contextStore) = storesFromFolder(modelFolder)
 
     val stopwords = loadStopwords(modelFolder)
 
@@ -136,7 +153,6 @@ object SpotlightModel {
 
     val spotters: java.util.Map[SpotterPolicy, Spotter] = Map(SpotterPolicy.SpotXmlParser -> new SpotXmlParser(), SpotterPolicy.Default -> spotter).asJava
     val disambiguators: java.util.Map[DisambiguationPolicy, ParagraphDisambiguatorJ] = Map(DisambiguationPolicy.Default -> disambiguator).asJava
-
     new SpotlightModel(tokenizer, spotters, disambiguators, properties)
   }
 }
