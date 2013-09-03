@@ -92,6 +92,12 @@
             <artifactId>index</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.dbpedia.spotlight</groupId>
+            <artifactId>collective</artifactId>
+            <version>0.6</version>
+        </dependency>
+
         <!--dependency>
             <groupId>org.dbpedia.spotlight</groupId>
             <artifactId>jung</artifactId>

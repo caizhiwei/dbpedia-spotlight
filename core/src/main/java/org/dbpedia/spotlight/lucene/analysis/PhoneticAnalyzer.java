@@ -18,6 +18,11 @@
 
 package org.dbpedia.spotlight.lucene.analysis;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.util.Set;
+
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.LowerCaseFilter;
 import org.apache.lucene.analysis.StopFilter;
@@ -29,17 +34,12 @@ import org.apache.lucene.analysis.standard.StandardTokenizer;
 import org.apache.lucene.util.Version;
 import org.dbpedia.spotlight.model.SpotlightConfiguration;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
-import java.util.Set;
-
 /**
  * Used for indexing text that can contain spelling anomalies
  *
  * @author pablomendes
  */
-public class PhoneticAnalyzer extends Analyzer {
+public final class PhoneticAnalyzer extends Analyzer {
 
     private Set<String> mStopWordSet;
     private Version mMatchVersion;
@@ -57,7 +57,7 @@ public class PhoneticAnalyzer extends Analyzer {
     }
 
     @Override
-    public TokenStream tokenStream(String fieldName, Reader reader) {
+    public final TokenStream tokenStream(String fieldName, Reader reader) {
         TokenStream result = new StandardTokenizer(mMatchVersion, reader);
         result = new StandardFilter(mMatchVersion, result);
         result = new LowerCaseFilter(mMatchVersion, result);            // lowercased only
@@ -68,7 +68,7 @@ public class PhoneticAnalyzer extends Analyzer {
     }
 
     public static void main(String[] args) throws IOException {
-        String myString = "This is a text";
+        String myString = "cancer";
         Analyzer analyzer = new PhoneticAnalyzer(Version.LUCENE_36,SpotlightConfiguration.DEFAULT_STOPWORDS);
         System.out.println("Analyzing: \"" + myString +"\"");
         StringReader reader = new StringReader(myString);
