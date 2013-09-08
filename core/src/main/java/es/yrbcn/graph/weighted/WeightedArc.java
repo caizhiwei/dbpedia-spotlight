@@ -1,4 +1,4 @@
-package en.yrbcn.graph.weighted;
+package es.yrbcn.graph.weighted;
 
 public class WeightedArc {
 	public int src;

@@ -88,7 +88,7 @@ import com.martiansoftware.jsap.UnflaggedOption;
 
 public class WeightedPageRankPowerMethod extends WeightedPageRank {
 	private final static Logger LOGGER = it.unimi.dsi.Util.getLogger( WeightedPageRankPowerMethod.class );
-	
+
 	/** The rank vector after the last iteration (only meaningful after at least one step). */
 	public double[] previousRank = null;
 	/** A progress logger. */
@@ -132,13 +132,12 @@ public class WeightedPageRankPowerMethod extends WeightedPageRank {
 
 		logger.info( "Completed." );
 	}
-	
+
 	/** Computes the next step of the Power Method.
 	 */
 	public void step() throws IOException {
 		double[] oldRank = rank, newRank = previousRank;
 		DoubleArrays.fill( newRank, 0.0 );
-		
 		// for each node, calculate its outdegree and redistribute its rank among pointed nodes
 		double accum = 0.0;
 		
@@ -166,7 +165,7 @@ public class WeightedPageRankPowerMethod extends WeightedPageRank {
 			progressLogger.update();
 		}
 		progressLogger.done();
-		
+
 		final double accumOverNumNodes = accum / numNodes;
 		
 		final double oneOverNumNodes = 1.0 / numNodes;
@@ -264,9 +263,9 @@ public class WeightedPageRankPowerMethod extends WeightedPageRank {
 			+ "an L2-distance smaller than a given threshold (-t option); in any case no more than a fixed"
 			+ "number of iterations (-i option) is performed.",
 			new Parameter[] {
-			new FlaggedOption( "alpha", JSAP.DOUBLE_PARSER, Double.toString( WeightedPageRank.DEFAULT_ALPHA ), JSAP.NOT_REQUIRED, 'a', "alpha", "Damping factor."),
-			new FlaggedOption( "maxIter", JSAP.INTEGER_PARSER, Integer.toString( WeightedPageRank.DEFAULT_MAX_ITER ), JSAP.NOT_REQUIRED, 'i', "max-iter", "Maximum number of iterations."),
-			new FlaggedOption( "threshold", JSAP.DOUBLE_PARSER, Double.toString( WeightedPageRank.DEFAULT_THRESHOLD ), JSAP.NOT_REQUIRED, 't', "threshold", "Threshold to determine whether to stop."),
+			new FlaggedOption( "alpha", JSAP.DOUBLE_PARSER, Double.toString(DEFAULT_ALPHA), JSAP.NOT_REQUIRED, 'a', "alpha", "Damping factor."),
+			new FlaggedOption( "maxIter", JSAP.INTEGER_PARSER, Integer.toString(DEFAULT_MAX_ITER), JSAP.NOT_REQUIRED, 'i', "max-iter", "Maximum number of iterations."),
+			new FlaggedOption( "threshold", JSAP.DOUBLE_PARSER, Double.toString(DEFAULT_THRESHOLD), JSAP.NOT_REQUIRED, 't', "threshold", "Threshold to determine whether to stop."),
 			new FlaggedOption( "coeff", JSAP.STRING_PARSER, JSAP.NO_DEFAULT, JSAP.NOT_REQUIRED, 'c', "coeff", "Save the k-th coefficient of the Taylor polynomial using this basename." ),
 			new FlaggedOption( "derivative", JSAP.INTEGER_PARSER, JSAP.NO_DEFAULT, JSAP.NOT_REQUIRED, 'd', "derivative", "The order(s) of the the derivative(s) to be computed (>0)." ).setAllowMultipleDeclarations( true ),
 			new FlaggedOption( "preferenceVector", JSAP.STRING_PARSER, JSAP.NO_DEFAULT, JSAP.NOT_REQUIRED, 'p', "preference-vector", "A preference vector stored as a vector of binary doubles." ),

@@ -1,4 +1,4 @@
-package en.yrbcn.graph.weighted;
+package es.yrbcn.graph.weighted;
 
 /*		 
  * Copyright (C) 2007 Paolo Boldi and Sebastiano Vigna 

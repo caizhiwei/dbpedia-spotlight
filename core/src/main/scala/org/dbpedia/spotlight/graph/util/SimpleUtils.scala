@@ -1,7 +1,6 @@
 package org.dbpedia.spotlight.util
 
 import java.io.File
-import net.sf.json.JSONObject
 
 /**
  * Created with IntelliJ IDEA.
