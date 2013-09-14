@@ -9,6 +9,7 @@ import scala.collection.JavaConversions._
 import org.dbpedia.spotlight.model.Paragraph
 import scala.io.Source
 import org.dbpedia.spotlight.db.concurrent.SpotterWrapper
+import org.dbpedia.spotlight.disambiguate.GraphBasedDisambiguator
 
 object EvaluateSpotlightModel {
 
@@ -62,11 +63,16 @@ object EvaluateSpotlightModel {
 
     val baseline: DBBaselineDisambiguator = new DBBaselineDisambiguator(sfStore, resStore, candMapStore)
 
+    val graphDisambiguator = new GraphBasedDisambiguator("../conf/graph.properties",disambiguator.disambiguator, disambiguator.disambiguator.asInstanceOf[DBTwoStepDisambiguator].surfaceFormStore)
+
     //Evaluate full:
     EvaluateParagraphDisambiguator.evaluate(corpusDisambiguate, disambiguator.disambiguator, List(), List())
 
     //Evaluate baseline:
     EvaluateParagraphDisambiguator.evaluate(corpusDisambiguate, baseline, List(), List())
+
+    //Evaluate graph:
+    EvaluateParagraphDisambiguator.evaluate(corpusDisambiguate, graphDisambiguator, List(), List())
 
     //Spotting:
     val corpusSpot = new WikipediaHeldoutCorpus(Source.fromFile(heldout).getLines().toSeq.take(6000), None, None)

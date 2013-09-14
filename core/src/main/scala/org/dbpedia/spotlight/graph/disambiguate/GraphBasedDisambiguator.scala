@@ -24,8 +24,7 @@ import java.io.{ByteArrayInputStream, File}
 import org.dbpedia.spotlight.lucene.similarity.{CachedInvCandFreqSimilarity, JCSTermCache}
 import org.dbpedia.spotlight.lucene.search.{MergedOccurrencesContextSearcher, LuceneCandidateSearcher}
 import scala.collection.JavaConverters._
-import org.dbpedia.spotlight.exceptions.{ItemNotFoundException, SearchException, InputException}
-import org.dbpedia.spotlight.exceptions.SearchException
+import org.dbpedia.spotlight.exceptions._
 import org.dbpedia.spotlight.model._
 import org.dbpedia.spotlight.graph.{HostMap, ReferentGraph}
 import org.apache.lucene.index.Term
@@ -36,6 +35,9 @@ import org.apache.lucene.search.ScoreDoc
 import it.unimi.dsi.webgraph.labelling.ArcLabelledImmutableGraph
 import org.dbpedia.spotlight.util.{GraphUtils, GraphConfiguration}
 import it.unimi.dsi.webgraph.{ImmutableGraph, Transform}
+import org.dbpedia.spotlight.db.DBTwoStepDisambiguator
+import org.dbpedia.spotlight.db.model.SurfaceFormStore
+import scala.Some
 
 /**
  * Created with IntelliJ IDEA.
@@ -44,113 +46,16 @@ import it.unimi.dsi.webgraph.{ImmutableGraph, Transform}
  * Time: 3:56 PM
  */
 
-/**
- * This class implements ParagraphDisambiguator. A graph will be constructed to leverage the overall disambiguation
- * decisions in the hope to improve the overall disambiguation performance
- *
- * Disambiguators implemented in the collective module can be operated on paragraphs. One occurrence cannot be
- * disambiguated collectively. So when doing evaluation, please use one that evaluate paragraph.
- * @author hectorliu
- */
-
-class GraphBasedDisambiguator(val candidateSearcher: CandidateSearcher, val contextSearcher:MergedOccurrencesContextSearcher, val graphConfigFileName: String) extends ParagraphDisambiguator {
-
-  private val graphConfig = new GraphConfiguration(graphConfigFileName)
+class DefaultPrior(val candidateSearcher: CandidateSearcher, val contextSearcher:MergedOccurrencesContextSearcher) {
 
   private val LOG = LogFactory.getLog(this.getClass)
-
-  LOG.info("Initializing disambiguator object ...")
-
-  LOG.info("Loading graphs...")
-  private val offline = "true" == graphConfig.getOrElse("org.dbpedia.spotlight.graph.offline","false")
-  private val uriMapFile = new File(graphConfig.get("org.dbpedia.spotlight.graph.dir")+graphConfig.get("org.dbpedia.spotlight.graph.mapFile"))
-  private val uri2IdxMap = HostMap.load(uriMapFile)
-
-  LOG.info("Preparing graphs...")
-  private val baseDir = graphConfig.get("org.dbpedia.spotlight.graph.dir")
-  private val sgSubDir = baseDir+graphConfig.get("org.dbpedia.spotlight.graph.semantic.dir")
-  private val sgBasename = graphConfig.get("org.dbpedia.spotlight.graph.semantic.basename")
-
-  private val sg = GraphUtils.loadAsArcLablelled(sgSubDir,sgBasename,offline)
-
-  /**
-   * Every disambiguator has a name that describes its settings (used in evaluation to compare results)
-   * @return a short description of the Disambiguator
-   */
-  def name = {
-    this.getClass.getSimpleName
-  }
-
-  def query(text: Text, allowedUris: Array[DBpediaResource]) = {
-    LOG.debug("Setting up query")
-    val context = if (text.text.size < 250) text.text.concat(" "+text.text) else text.text
-
-    val filter = new org.apache.lucene.search.TermsFilter()
-    allowedUris.foreach( u => filter.addTerm(new Term(DBpediaResourceField.URI.toString,u.uri)))
-
-    val mlt = new MoreLikeThis(contextSearcher.mReader)
-    mlt.setFieldNames(Array(DBpediaResourceField.CONTEXT.toString))
-    mlt.setAnalyzer(contextSearcher.getLuceneManager.defaultAnalyzer)
-
-    val inputStream = new ByteArrayInputStream(context.getBytes("UTF-8"));
-    val query = mlt.like(inputStream)
-    contextSearcher.getHits(query, allowedUris.size, 50000, filter)
-  }
-
-  /**
-   * Executes disambiguation per paragraph (collection of occurrences).
-   * Can be seen as a classification task: unlabeled instances in, labeled instances out.
-   *
-   * @param paragraph
-   * @return
-   * @throws SearchException
-   * @throws InputException
-   */
-  def disambiguate(paragraph: Paragraph) = {
-    //TODO Could consider implement this method in ParagraphDisambiguatorJ
-    // Actually this function could be the same for all disambiguators,
-    // given that they all needs to implements bestK
-
-    // return first from each candidate set
-    bestK(paragraph, 5)
-      .filter(kv =>
-      kv._2.nonEmpty)
-      .map(kv =>
-      kv._2.head)
-      .toList
-  }
-
-  /**
-   * Executes disambiguation per paragraph, returns a list of possible candidates.
-   * Can be seen as a ranking (rather than classification) task: query instance in, ranked list of target URIs out.
-   *
-   * @param paragraph
-   * @param k
-   * @return
-   * @throws SearchException
-   * @throws ItemNotFoundException    when a surface form is not in the index
-   * @throws InputException
-   */
-  def bestK(paragraph: Paragraph, k: Int): Map[SurfaceFormOccurrence, List[DBpediaResourceOccurrence]] = {
-
-    LOG.debug("Running bestK for paragraph %s.".format(paragraph.id))
-
-    if (paragraph.occurrences.size == 0) return Map[SurfaceFormOccurrence, List[DBpediaResourceOccurrence]]()
-
-    val scoredSf2Cands = getContextScore(paragraph)
-
-    val rGraph = new ReferentGraph(sg, scoredSf2Cands, uri2IdxMap, graphConfig)
-
-    rGraph.getResult(k)
-  }
-
   /**
    * Get the initial context score of each possible candidates
    *
    * @param paragraph The Paragraph to be disambiguated
    * @return A map that each surface form occurrence is linked with a list of possible DBpediaResourceOccurrence with context score associated
    */
-  private def getContextScore(paragraph: Paragraph) : CompactHashMap[SurfaceFormOccurrence,(List[DBpediaResourceOccurrence],Double)]  = {
+  def getContextScore(paragraph: Paragraph) : CompactHashMap[SurfaceFormOccurrence,(List[DBpediaResourceOccurrence],Double)]  = {
     println(paragraph.occurrences.head.textOffset)
     LOG.debug("Getting initial context scores.")
     val allCandidates = CompactHashSet[DBpediaResource]
@@ -197,7 +102,6 @@ class GraphBasedDisambiguator(val candidateSearcher: CandidateSearcher, val cont
       })
       edgesMap += (sfOcc -> (candOccs,getSurfaceImportance(sfOcc.surfaceForm)))
     })
-    println(scoredSf2Cands)
     scoredSf2Cands
   }
 
@@ -242,4 +146,118 @@ class GraphBasedDisambiguator(val candidateSearcher: CandidateSearcher, val cont
     candidates.toSet
   }
 
+
+
+  def query(text: Text, allowedUris: Array[DBpediaResource]) = {
+    LOG.debug("Setting up query")
+    val context = if (text.text.size < 250) text.text.concat(" "+text.text) else text.text
+
+    val filter = new org.apache.lucene.search.TermsFilter()
+    allowedUris.foreach( u => filter.addTerm(new Term(DBpediaResourceField.URI.toString,u.uri)))
+
+    val mlt = new MoreLikeThis(contextSearcher.mReader)
+    mlt.setFieldNames(Array(DBpediaResourceField.CONTEXT.toString))
+    mlt.setAnalyzer(contextSearcher.getLuceneManager.defaultAnalyzer)
+
+    val inputStream = new ByteArrayInputStream(context.getBytes("UTF-8"));
+    val query = mlt.like(inputStream)
+    contextSearcher.getHits(query, allowedUris.size, 50000, filter)
+  }
+
+}
+
+/**
+ * This class implements ParagraphDisambiguator. A graph will be constructed to leverage the overall disambiguation
+ * decisions in the hope to improve the overall disambiguation performance
+ *
+ * Disambiguators implemented in the collective module can be operated on paragraphs. One occurrence cannot be
+ * disambiguated collectively. So when doing evaluation, please use one that evaluate paragraph.
+ * @author hectorliu
+ */
+
+class GraphBasedDisambiguator(val graphConfigFileName: String , val priorDisambiguator: ParagraphDisambiguator, surfaceFormStore: SurfaceFormStore ) extends ParagraphDisambiguator {
+
+  private val graphConfig = new GraphConfiguration(graphConfigFileName)
+
+  private val LOG = LogFactory.getLog(this.getClass)
+
+  private val MAX_CANDIDATES=20
+
+  LOG.info("Initializing disambiguator object ...")
+
+  LOG.info("Loading graphs...")
+  private val offline = "true" == graphConfig.getOrElse("org.dbpedia.spotlight.graph.offline","false")
+  private val uriMapFile = new File(graphConfig.get("org.dbpedia.spotlight.graph.dir")+graphConfig.get("org.dbpedia.spotlight.graph.mapFile"))
+  private val uri2IdxMap = HostMap.load(uriMapFile)
+
+  LOG.info("Preparing graphs...")
+  private val baseDir = graphConfig.get("org.dbpedia.spotlight.graph.dir")
+  private val sgSubDir = baseDir+graphConfig.get("org.dbpedia.spotlight.graph.semantic.dir")
+  private val sgBasename = graphConfig.get("org.dbpedia.spotlight.graph.semantic.basename")
+
+  private val sg = GraphUtils.loadAsArcLablelled(sgSubDir,sgBasename,offline)
+
+  /**
+   * Every disambiguator has a name that describes its settings (used in evaluation to compare results)
+   * @return a short description of the Disambiguator
+   */
+  def name = {
+    this.getClass.getSimpleName
+  }
+
+  /**
+   * Executes disambiguation per paragraph (collection of occurrences).
+   * Can be seen as a classification task: unlabeled instances in, labeled instances out.
+   *
+   * @param paragraph
+   * @return
+   * @throws SearchException
+   * @throws InputException
+   */
+  def disambiguate(paragraph: Paragraph) = {
+    //TODO Could consider implement this method in ParagraphDisambiguatorJ
+    // Actually this function could be the same for all disambiguators,
+    // given that they all needs to implements bestK
+
+    // return first from each candidate set
+    bestK(paragraph, 5)
+      .filter(kv =>
+      kv._2.nonEmpty)
+      .map(kv =>
+      kv._2.head)
+      .toList
+  }
+
+  /**
+   * Executes disambiguation per paragraph, returns a list of possible candidates.
+   * Can be seen as a ranking (rather than classification) task: query instance in, ranked list of target URIs out.
+   *
+   * @param paragraph
+   * @param k
+   * @return
+   * @throws SearchException
+   * @throws ItemNotFoundException    when a surface form is not in the index
+   * @throws InputException
+   */
+  def bestK(paragraph: Paragraph, k: Int): Map[SurfaceFormOccurrence, List[DBpediaResourceOccurrence]] = {
+
+    LOG.debug("Running bestK for paragraph %s.".format(paragraph.id))
+
+    if (paragraph.occurrences.size == 0) return Map[SurfaceFormOccurrence, List[DBpediaResourceOccurrence]]()
+
+    val sf_candidates = priorDisambiguator.bestK(paragraph, MAX_CANDIDATES)
+    val scoredSf2Cands = for (p <- sf_candidates) yield {
+      val sfOcc = p._1
+      val canList = p._2
+       val sf = try {
+        1.0/surfaceFormStore.getSurfaceForm(sfOcc.surfaceForm.name).totalCount
+      } catch {
+        case e: SurfaceFormNotFoundException => 0
+      }
+      (sfOcc,(canList,sf))
+    }
+    val rGraph = new ReferentGraph(sg, scoredSf2Cands, uri2IdxMap, graphConfig)
+
+    rGraph.getResult(k)
+  }
 }

@@ -30,7 +30,7 @@ import scala.collection.mutable.ArrayBuffer
 
 class DBTwoStepDisambiguator(
   tokenStore: TokenTypeStore,
-  surfaceFormStore: SurfaceFormStore,
+  val surfaceFormStore: SurfaceFormStore,
   resourceStore: ResourceStore,
   val candidateSearcher: DBCandidateSearcher,
   contextStore: ContextStore,

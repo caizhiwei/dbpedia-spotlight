@@ -32,7 +32,7 @@ import com.officedepot.cdap2.collection.CompactHashMap
  * @author Hectorliu
  * @param scoredSf2CandsMap
  */
-class ReferentGraph(semanticGraph:ArcLabelledImmutableGraph, scoredSf2CandsMap: CompactHashMap[SurfaceFormOccurrence,(List[DBpediaResourceOccurrence],Double)], uri2IdxMap: CompactHashMap[String,Int], config:GraphConfiguration) {
+class ReferentGraph(semanticGraph:ArcLabelledImmutableGraph, scoredSf2CandsMap: Map[SurfaceFormOccurrence,(List[DBpediaResourceOccurrence],Double)], uri2IdxMap: CompactHashMap[String,Int], config:GraphConfiguration) {
   private val LOG = LogFactory.getLog(this.getClass)
 
   LOG.debug("Initializing Graph Object.")
