@@ -263,15 +263,6 @@ object GraphUtils {
   def main(args:Array[String]){
     println(new File("/home/wei/develop/IdeaProjects/pignlproc/out/graph/occs").isAbsolute)
     LOG.info("Testing graph loading")
-    //    val immutableG = loadAsImmutable("graph/occs/occsGraph",false)
-    //    println(immutableG.randomAccess())
-    //    println(immutableG.numNodes())
-
-    //    val archG = loadAsArcLablelled("graph/occs/occsGraph",false)
-    //    val revArchG = Transform.transposeOffline(archG,100000)
-    //    println(revArchG.randomAccess())
-    //
-    //    storeWeightedGraph(revArchG,"/home/hector/Researches/nlp/DBpedia_Spotlight/dbpedia-spotlight/collective/graph/occs/occTransposeGraph")
     val revArchRandomG = loadAsArcLablelled("/home/wei/develop/IdeaProjects/pignlproc/out/graph/occs/","occsTransposeGraph",false)
     println(revArchRandomG.randomAccess())
     println(revArchRandomG.numNodes())

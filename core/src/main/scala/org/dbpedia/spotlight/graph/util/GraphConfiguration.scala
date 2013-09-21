@@ -16,15 +16,18 @@ import org.dbpedia.spotlight.exceptions.ConfigurationException
 /**
  * Class deal with the configuration, also do validation of configuration to fail fast
  * @param configFile  The "properties" file about graph configs
+ * @param check  whether to check if necessary file exist (set false when building graph)
  */
-class GraphConfiguration(val configFile:File) {
+class GraphConfiguration(val configFile:File,val check: Boolean=true) {
 
   private val LOG = LogFactory.getLog(this.getClass)
 
   def this(fileName: String) {
     this(new File(fileName))
   }
-
+  def this(fileName: String, check: Boolean) {
+    this(new File(fileName), check)
+  }
   private val properties : Properties = new Properties()
 
   LOG.info("Loading configuration file "+configFile)
@@ -115,6 +118,8 @@ class GraphConfiguration(val configFile:File) {
 
   //validate running environment, need at least the core semantic file exists
   private def runValidate {
+    if(!check)
+      return
     LOG.info("Validating for run, to validate indexing, change 'org.dbpedia.spotlight.graph.validation' to 'index'.")
 
     val filesToCheck = List(

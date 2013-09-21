@@ -83,11 +83,42 @@ object GraphMaker{
     val ocwgTrans = GraphUtils.transpose(graph,batchSize)
     GraphUtils.storeWeightedGraph(ocwgTrans,occSubDir+occTransposeBaseName)
   }
+  def makeMWMergedGraph(graphConfig: GraphConfiguration){
+    val offline = "true" == graphConfig.getOrElse("org.dbpedia.spotlight.graph.offline","false")
 
+    LOG.info("Preparing graphs...")
+
+    val baseDir = graphConfig.get("org.dbpedia.spotlight.graph.dir")
+    val cooccSubDir = baseDir+graphConfig.get("org.dbpedia.spotlight.graph.coocc.dir")
+    val cooccGraphBasename = graphConfig.get("org.dbpedia.spotlight.graph.coocc.basename")
+
+    val occTransposeSubDir = baseDir+graphConfig.get("org.dbpedia.spotlight.graph.occ.dir")
+    val occTransposeGraphBaseName = graphConfig.get("org.dbpedia.spotlight.graph.transpose.occ.basename")
+
+    val rowg = GraphUtils.loadAsArcLablelled(occTransposeSubDir,occTransposeGraphBaseName, offline)
+    val cwg = GraphUtils.loadAsArcLablelled(cooccSubDir,cooccGraphBasename,offline)
+
+
+    //preparing output graph
+    val sgSubDir = baseDir+graphConfig.get("org.dbpedia.spotlight.graph.semantic.dir")
+    SimpleUtils.createDir(sgSubDir)
+    val sgBasename = graphConfig.get("org.dbpedia.spotlight.graph.semantic.basename")
+    val sgIntegerListFileName = sgSubDir+graphConfig.get("org.dbpedia.spotlight.graph.semantic.integerList")
+
+    val sg = new MWMergedGraph(rowg,cwg)
+
+    val sgFile = new File(sgIntegerListFileName)
+
+    sg.buildTripleList(sgFile)
+
+    val g = GraphUtils.buildWeightedGraphFromFile(sgFile,graphConfig.getNodeNumber)
+
+    GraphUtils.storeWeightedGraph(g,sgSubDir+sgBasename)
+  }
   //parameter is the graph properties file: ../../conf/graph.properties
   def main(args: Array[String]) {
     val graphConfigFileName = args(0)
-    val config = new GraphConfiguration(graphConfigFileName)
+    val config = new GraphConfiguration(graphConfigFileName, false)
 
     val baseDir = config.get("org.dbpedia.spotlight.graph.dir")
 
@@ -95,6 +126,9 @@ object GraphMaker{
     SimpleUtils.createDir(baseDir)
 
     val uriMapFile = new File(config.get("org.dbpedia.spotlight.graph.dir")+config.get("org.dbpedia.spotlight.graph.mapFile"))
+    if(!uriMapFile.exists()) {
+      uriMapFile.createNewFile();
+    }
     val occsTempFile = new File(config.get("org.dbpedia.spotlight.graph.occ.temp"))
 
     //Generate the host map
@@ -108,5 +142,6 @@ object GraphMaker{
 
     makeOccsGraph(baseDir,config,hostMap,numberOfNodes)
     makeCooccGraph(baseDir,config,hostMap,numberOfNodes)
+    makeMWMergedGraph(config)
   }
 }
